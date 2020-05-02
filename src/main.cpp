@@ -10,6 +10,7 @@ void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vecto
 void multiplyMatrixSeq(std::vector<double> &matrix1, std::vector<double>  &matrix2, std::vector<double>  &result, int rowA, int colA, int rowB, int colB);
 void multiplyMatrixPar(std::vector<double>  &matrix1, std::vector<double>  &matrix2, std::vector<double>  &result, int rowA, int colA, int rowB, int colB);
 void printMatrix(std::vector<double>  &matrix);
+void saveMatrix(std::string fileName, std::vector<double> &matrix, int rowN, int colN);
 
 int main(int argc, char** argv){
 
@@ -32,11 +33,13 @@ int main(int argc, char** argv){
             multiplyMatrixSeq(matrix1, matrix2, result, rowA, colA, rowB, colB);
             auto t2 = std::chrono::high_resolution_clock::now();
             std::cout<<"seq execution time: "<<std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count()<<"\n";
+            saveMatrix("seqResult.txt", result, rowA, colB);
         }else{
             auto t1 = std::chrono::high_resolution_clock::now();
             multiplyMatrixPar(matrix1, matrix2, result, rowA, colA, rowB, colB);
             auto t2 = std::chrono::high_resolution_clock::now();
             std::cout<<"par execution time: "<<std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count()<<"\n";
+            saveMatrix("parResult.txt", result, rowA, colB);
         }
     }
 
@@ -119,5 +122,21 @@ void printMatrix(std::vector<double>  &matrix){
         if(i%3==2){
             std::cout<<"\n";
         }
+    }
+}
+
+void saveMatrix(std::string fileName, std::vector<double> &matrix, int rowN, int colN){
+    std::ofstream outFile;
+    outFile.open(fileName);
+    if(outFile.is_open()){
+        outFile << rowN << " " << colN<<"\n";
+        for(long unsigned int i=0; i<matrix.size(); i++){
+            outFile << matrix[i] << " ";
+            if(i%colN==0){
+                outFile << "\n";
+            }
+        }
+
+        outFile.close();
     }
 }
