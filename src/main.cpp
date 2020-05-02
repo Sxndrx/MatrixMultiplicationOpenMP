@@ -2,20 +2,21 @@
 #include <regex>
 #include <fstream>
 #include <vector>
+#include <chrono>
+#include "omp.h"
 
 bool isCorrectInstruction(char **argv, int argc);
-void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vector<std::vector<double>>  &matrix);
-void multiplyMatrixSeq(std::vector<std::vector<double>>  &matrix1, std::vector<std::vector<double>>  &matrix2, std::vector<std::vector<double>>  &result, int rowA, int colA, int rowB, int colB);
-void multiplyMatrixPar(std::vector<std::vector<double>>  &matrix1, std::vector<std::vector<double>>  &matrix2, std::vector<std::vector<double>>  &result, int rowA, int colA, int rowB, int colB);
-void printMatrix(std::vector<std::vector<double>>  &matrix);
+void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vector<double> &matrix);
+void multiplyMatrixSeq(std::vector<double> &matrix1, std::vector<double>  &matrix2, std::vector<double>  &result, int rowA, int colA, int rowB, int colB);
+void multiplyMatrixPar(std::vector<double>  &matrix1, std::vector<double>  &matrix2, std::vector<double>  &result, int rowA, int colA, int rowB, int colB);
+void printMatrix(std::vector<double>  &matrix);
 
 int main(int argc, char** argv){
 
     int rowA, rowB, colA, colB = 0;
     bool test = false;
-    std::vector<std::vector<double>>  matrix1(rowA, std::vector<double>(colA));
-    std::vector<std::vector<double>>  matrix2(rowB, std::vector<double>(colB)); 
-
+    std::vector<double>  matrix1(rowA*colA);
+    std::vector<double>  matrix2(rowB*colB); 
     if(isCorrectInstruction(argv, argc) || test){
         if(test){
            readMatrixFile("matrix1.txt", rowA, colA, matrix1);
@@ -25,15 +26,18 @@ int main(int argc, char** argv){
         readMatrixFile(argv[argc-1], rowB, colB, matrix2);
         }
 
-        std::vector<std::vector<double>> result(rowA, std::vector<double>(colB));
-        if(argv[2]=="-s"){
+        std::vector<double> result(rowA*colB);
+        if(argc==4){
+            auto t1 = std::chrono::high_resolution_clock::now();
             multiplyMatrixSeq(matrix1, matrix2, result, rowA, colA, rowB, colB);
+            auto t2 = std::chrono::high_resolution_clock::now();
+            std::cout<<"seq execution time: "<<std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count()<<"\n";
         }else{
-
+            auto t1 = std::chrono::high_resolution_clock::now();
+            multiplyMatrixPar(matrix1, matrix2, result, rowA, colA, rowB, colB);
+            auto t2 = std::chrono::high_resolution_clock::now();
+            std::cout<<"par execution time: "<<std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count()<<"\n";
         }
-        printMatrix(matrix1);
-        printMatrix(matrix2);
-
     }
 
     return 0;
@@ -49,7 +53,7 @@ std::regex instruction_regex("(-s )?\\w+\\.txt \\w+\\.txt ");
     return std::regex_match(instruction, instruction_regex) ? true : false;
 }
 
-void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vector<std::vector<double>>  &matrix){
+void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vector<double>  &matrix){
     std::ifstream matrixFile(matrixFileName);
     if(matrixFile.is_open()){
         int i = 0;
@@ -57,14 +61,14 @@ void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vecto
         double number;
         while(matrixFile >> number){
             if(i>1){
-                matrix[(i-2)%rowN][j%colN]=number;
+                matrix[j]=number;
                 j++;
             }else{
                 if(i==0)
                     rowN = number;
                 else{
                     colN = number;
-                    matrix.resize(rowN, std::vector<double>(colN));
+                    matrix.resize(rowN*colN);
                 }
             }
             if(j%3==0){
@@ -75,39 +79,45 @@ void readMatrixFile(std::string matrixFileName, int &rowN, int &colN, std::vecto
     }
 }
 
-void multiplyMatrixSeq(std::vector<std::vector<double>>  &matrix1, std::vector<std::vector<double>>  &matrix2, std::vector<std::vector<double>>  &result, int rowA, int colA, int rowB, int colB){
+void multiplyMatrixSeq(std::vector<double>  &matrix1, std::vector<double>  &matrix2, std::vector<double>  &result, int rowA, int colA, int rowB, int colB){
     if(colA==rowB){
         for(int i = 0; i<rowA; i++){
             for(int j=0; j<colB; j++){
-                result[i][j]=0;
+                result[i*colB+j]=0;
                 for(int n=0; n<colA; n++){
-                    result[i][j]+=matrix1[i][n]*matrix2[n][j];
+                    result[i*colB+j]+=matrix1[i*colB+n]*matrix2[n*colB+j];
                 }
             }
         }
     }
 }
 
-void multiplyMatrixPar(std::vector<std::vector<double>>  &matrix1, std::vector<std::vector<double>>  &matrix2, std::vector<std::vector<double>>  &result, int rowA, int colA, int rowB, int colB){
+void multiplyMatrixPar(std::vector<double>  &matrix1, std::vector<double>  &matrix2, std::vector<double>  &result, int rowA, int colA, int rowB, int colB){
         if(colA==rowB){
-            
-        for(int i = 0; i<rowA; i++){
-            for(int j=0; j<colB; j++){
-                result[i][j]=0;
-                for(int n=0; n<colA; n++){
-                    result[i][j]+=matrix1[i][n]*matrix2[n][j];
+
+        int i, j, n =0;
+        #pragma omp parallel shared(result) private(i,j,n)
+        {
+            #pragma omp for schedule(static)
+                for(i = 0; i<rowA; i++){
+                    for(j=0; j<colB; j++){
+                        double total = 0;
+                        for(n=0; n<colA; n++){
+                            total+=matrix1[i*colB+n]*matrix2[n*colB+j];
+                        }
+                    result[i*colB+j]=total;
+                    }
                 }
-            }
         }
+       
     }
 }
 
-void printMatrix(std::vector<std::vector<double>>  &matrix){
-    for (auto vec: matrix){
-        std::cout << " |";
-        for(auto value: vec){
-            std::cout << " " << value;        
+void printMatrix(std::vector<double>  &matrix){
+    for (long unsigned int i=0; i<matrix.size(); i++){
+        std::cout << " |"<<matrix[i]<<"|";
+        if(i%3==2){
+            std::cout<<"\n";
         }
-        std::cout << " |" << "\n";
     }
 }
