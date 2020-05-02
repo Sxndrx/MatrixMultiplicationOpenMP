@@ -123,16 +123,16 @@ void multiplyMatrixPar(std::vector<double> &matrix1, std::vector<double> &matrix
     if (colA == rowB)
     {
         int i, j, n = 0;
-#pragma omp parallel shared(result) private(i, j, n)
+        #pragma omp parallel shared(result)
         {
             std::cout << "thread nr: " << omp_get_thread_num() << "\n";
-#pragma omp for schedule(static)
-            for (i = 0; i < rowA; i++)
+            #pragma omp for schedule(static)
+            for (int i = 0; i < rowA; i++)
             {
-                for (j = 0; j < colB; j++)
+                for (int j = 0; j < colB; j++)
                 {
                     double total = 0;
-                    for (n = 0; n < colA; n++)
+                    for (int n = 0; n < colA; n++)
                     {
                         total += matrix1[i * colB + n] * matrix2[n * colB + j];
                     }
