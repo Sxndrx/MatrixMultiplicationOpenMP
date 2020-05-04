@@ -122,7 +122,6 @@ void multiplyMatrixPar(std::vector<double> &matrix1, std::vector<double> &matrix
 {
     if (colA == rowB)
     {
-        int i, j, n = 0;
         #pragma omp parallel shared(result)
         {
             std::cout << "thread nr: " << omp_get_thread_num() << "\n";
@@ -165,7 +164,7 @@ void saveMatrix(std::string fileName, std::vector<double> &matrix, int rowN, int
         for (long unsigned int i = 0; i < matrix.size(); i++)
         {
             outFile << matrix[i] << " ";
-            if (i % colN == 0)
+            if (i % colN == (long unsigned int) (colN-1))
             {
                 outFile << "\n";
             }
